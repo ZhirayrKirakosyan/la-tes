@@ -218,7 +218,7 @@ const card=r=>`<button class="card" data-id="${esc(r.id)}">${r.img?`<img src="${
 const fill=(el,items)=>{el.innerHTML=ERR?'<div class="note">Չհաջողվեց բեռնել հաղորդումները։ <button class="btn" data-retry style="margin-top:8px">Փորձել նորից</button></div>':items.length?items.map(card).join(""):"<p>Դեռ հրապարակումներ չկան։</p>"};
 const sheet=$("#sheet");
 // ===== Տվյալների շերտ. Supabase (եթե կարգավորված է) կամ տեղական փորձնական ռեժիմ =====
-const CFG={url:"",key:"",bucket:"photos"}; // Փուլ 6՝ միայն Project URL և anon/public key։ ԵՐԲԵՔ service_role բանալի
+const CFG={url:"https://ydhrjhmvdnftydnaiptw.supabase.co",key:"sb_publishable_NWC-xm9gp4BkOPeLYePBsw_yZLiKifM",bucket:"photos"}; // Փուլ 6՝ միայն Project URL և anon/public key։ ԵՐԲԵՔ service_role բանալի
 const BAD=(()=>{try{return JSON.parse(atob(CFG.key.split(".")[1])).role==="service_role"}catch{return false}})();
 if(BAD)console.error("service_role բանալին չի կարելի օգտագործել frontend-ում։");
 const SB=CFG.url&&!BAD&&window.supabase?supabase.createClient(CFG.url,CFG.key):null;
