@@ -227,6 +227,11 @@ const sheet=$("#sheet");
 const CFG={url:"https://ydhrjhmvdnftydnaiptw.supabase.co",key:"sb_publishable_NWC-xm9gp4BkOPeLYePBsw_yZLiKifM",bucket:"photos",localDemo:false}; // Փուլ 6՝ միայն Project URL և anon/public key։ ԵՐԲԵՔ service_role բանալի
 const BAD=(()=>{try{return JSON.parse(atob(CFG.key.split(".")[1])).role==="service_role"}catch{return false}})();
 if(BAD)console.error("service_role բանալին չի կարելի օգտագործել frontend-ում։");
+const H0=location.hash||"";
+const REC_URL=/[#&]type=recovery/.test(H0),LINK_ERR=!/^#\//.test(H0)&&/[#&](error|error_code)=/.test(H0);
+if(REC_URL)try{sessionStorage.setItem("lt_rec","1")}catch(e){}
+let LOGIN_NOTE=LINK_ERR?"Վերականգնման հղումը ժամկետանց է կամ արդեն օգտագործվել է։ Խնդրիր նոր հղում։":"";
+const REDIRECT=/^https?:$/.test(location.protocol)?location.origin+location.pathname:undefined;
 const SB=CFG.url&&!BAD&&window.supabase?supabase.createClient(CFG.url,CFG.key):null;
 const DEMO=!SB&&CFG.localDemo===true; // միայն տեղական փորձարկման համար. արտադրությունում պետք է մնա false
 const ST={pend:"Սպասում է ստուգման",ok:"Հաստատված",off:["Պաշտոնապես փոխանցված","Պատասխան ստացված","Լուծված"],good:"Լավ փոփոխություն",rej:"Մերժված",ret:"Վերադարձված խմբագրման"};
@@ -493,6 +498,36 @@ async function selftest(){
 }
 
 // ===== Մոդերատորի վահանակ =====
+// ===== Գաղտնաբառի վերականգնում (Supabase Auth) =====
+function forgotForm(el){
+ el.innerHTML='<h1>Գաղտնաբառի վերականգնում</h1><p class="why">Մուտքագրիր մոդերատորի էլ. հասցեն. կուղարկենք նոր գաղտնաբառ սահմանելու հղում։</p><label for="fe">Էլ. հասցե</label><input type="text" id="fe" autocomplete="username" inputmode="email"><div id="fm" aria-live="polite"></div><button class="btn" id="fs" type="button" style="width:100%;margin-top:12px">Ուղարկել վերականգնման հղումը</button><button class="btn o" id="fb" type="button" style="width:100%;margin-top:10px">Հետ՝ մուտքին</button>';
+ const msg=(c,t)=>{$("#fm").innerHTML='<p class="'+c+'">'+esc(t)+'</p>'};
+ $("#fb").onclick=()=>admin();
+ $("#fs").onclick=async()=>{
+  const em=$("#fe").value.trim();
+  if(!/^\S+@\S+\.\S+$/.test(em)){msg("err","Մուտքագրիր ճիշտ էլ. հասցե։");return}
+  const b=$("#fs");b.disabled=true;let r;
+  try{r=await SB.auth.resetPasswordForEmail(em,REDIRECT?{redirectTo:REDIRECT}:undefined)}catch(e){r={error:{status:0}}}
+  if(r.error){b.disabled=false;msg("err",r.error.status===429?"Չափազանց շատ փորձեր։ Փորձիր մի փոքր ուշ։":"Չհաջողվեց ուղարկել նամակը։ Ստուգիր կապը և փորձիր նորից։");return}
+  msg("note","Եթե այս հասցեով մոդերատորի հաշիվ կա, վերականգնման հղումը ուղարկված է։ Ստուգիր նաև «Spam» թղթապանակը։ Հղումը գործում է սահմանափակ ժամանակ։");
+  setTimeout(()=>{b.disabled=false},60000);
+ };
+}
+function recoveryForm(el){
+ el.innerHTML='<h1>Նոր գաղտնաբառ</h1><p class="why">Սահմանիր նոր գաղտնաբառ մոդերատորի հաշվի համար (առնվազն 8 նիշ)։</p><label for="np">Նոր գաղտնաբառ</label><input type="password" id="np" autocomplete="new-password"><label for="np2">Կրկնիր գաղտնաբառը</label><input type="password" id="np2" autocomplete="new-password"><p class="err" id="ne" role="alert"></p><button class="btn" id="ns" type="button" style="width:100%;margin-top:12px">Պահպանել գաղտնաբառը</button><button class="btn o" id="nc" type="button" style="width:100%;margin-top:10px">Չեղարկել</button>';
+ const done=async note=>{try{sessionStorage.removeItem("lt_rec")}catch(e){}LOGIN_NOTE=note||"";await SB.auth.signOut();admin()};
+ $("#nc").onclick=()=>done("");
+ $("#ns").onclick=async()=>{
+  const a=$("#np").value,c=$("#np2").value,er=$("#ne");er.textContent="";
+  if(a.length<8){er.textContent="Գաղտնաբառը պետք է լինի առնվազն 8 նիշ։";return}
+  if(a!==c){er.textContent="Գաղտնաբառերը չեն համընկնում։";return}
+  const b=$("#ns");b.disabled=true;let r;
+  try{r=await SB.auth.updateUser({password:a})}catch(e){r={error:{}}}
+  if(r.error){b.disabled=false;er.textContent=(r.error.status===401||/jwt|session/i.test(r.error.message||""))?"Վերականգնման սեանսը ավարտվել է։ Խնդրիր նոր հղում։":"Գաղտնաբառը չընդունվեց։ Ընտրիր ավելի ուժեղ գաղտնաբառ, որը տարբերվում է նախորդից։";return}
+  done("Գաղտնաբառը փոխվեց։ Մուտք գործիր նոր գաղտնաբառով։");
+ };
+}
+
 async function authFail(e){
  if(SB&&e&&(e.status===401||e.code==="PGRST301"||/jwt/i.test(e.message||""))){await SB.auth.signOut();admin();return true}
  return false;
@@ -502,8 +537,12 @@ async function admin(){
  if(!SB&&!DEMO){el.innerHTML='<h1>Մոդերատորի մուտք</h1><p class="note">Մոդերատորի մուտքը դեռ միացված չէ։ Այն աշխատում է միայն Supabase Auth-ի կարգավորումից հետո, և առանց մուտքի վահանակ չի բացվում։</p>';return}
  if(SB){
   const{data:{session}}=await SB.auth.getSession();
+  if(session&&sessionStorage.getItem("lt_rec")==="1"){recoveryForm(el);return}
   if(!session){
-   el.innerHTML='<h1>Մոդերատորի մուտք</h1><label for="em">Էլ. հասցե</label><input type="text" id="em" autocomplete="username"><label for="pw">Գաղտնաբառ</label><input type="password" id="pw" autocomplete="current-password" style="width:100%;min-height:52px;padding:12px 14px;border:2px solid #b9b19e;border-radius:12px"><p class="err" id="ae" role="alert"></p><button class="btn" id="li" style="width:100%;margin-top:12px">Մուտք</button>';
+   try{sessionStorage.removeItem("lt_rec")}catch(e){}
+   const note=LOGIN_NOTE;LOGIN_NOTE="";
+   el.innerHTML='<h1>Մոդերատորի մուտք</h1>'+(note?'<p class="note" role="status">'+esc(note)+'</p>':'')+'<label for="em">Էլ. հասցե</label><input type="text" id="em" autocomplete="username"><label for="pw">Գաղտնաբառ</label><input type="password" id="pw" autocomplete="current-password" style="width:100%;min-height:52px;padding:12px 14px;border:2px solid #b9b19e;border-radius:12px"><p class="err" id="ae" role="alert"></p><button class="btn" id="li" style="width:100%;margin-top:12px">Մուտք</button><button class="btn o" id="fp" type="button" style="width:100%;margin-top:10px">Մոռացել եմ գաղտնաբառը</button>';
+   $("#fp").onclick=()=>forgotForm(el);
    const go2=async()=>{const b=$("#li");b.disabled=true;$("#ae").textContent="";let r;try{r=await SB.auth.signInWithPassword({email:$("#em").value.trim(),password:$("#pw").value})}catch(e){r={error:{status:0}}}b.disabled=false;
     if(r.error)$("#ae").textContent=r.error.status===429?"Չափազանց շատ փորձեր։ Փորձիր մի փոքր ուշ։":"Մուտքը չհաջողվեց. ստուգիր էլ. հասցեն և գաղտնաբառը։";else admin()};
    $("#li").onclick=go2;$("#pw").addEventListener("keydown",e=>{if(e.key==="Enter")go2()});
@@ -544,8 +583,10 @@ const HERO="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgHBgoIC
 (function(){const im=$(".hf img"),fb=()=>{im.onerror=null;im.src=HERO;document.documentElement.style.setProperty("--hero","url("+HERO+")")};
  if(im.complete&&!im.naturalWidth)fb();else im.addEventListener("error",fb,{once:true})})();
 if(!SB&&!DEMO){const ab=document.querySelector('#v-menu [data-go=admin]');if(ab)ab.style.display="none"}
-if(SB)SB.auth.onAuthStateChange(ev=>{if(ev==="SIGNED_OUT"&&location.hash==="#/admin")setTimeout(admin,0)});
-refresh().then(route);
+if(SB)SB.auth.onAuthStateChange(ev=>{
+ if(ev==="PASSWORD_RECOVERY"){try{sessionStorage.setItem("lt_rec","1")}catch(e){}setTimeout(()=>{if(location.hash==="#/admin")admin();else location.hash="#/admin"},0)}
+ else if(ev==="SIGNED_OUT"&&location.hash==="#/admin")setTimeout(admin,0)});
+refresh().then(()=>{if(SB&&(REC_URL||LINK_ERR)&&location.hash!=="#/admin")location.hash="#/admin";else route()});
 </script>
 </body>
 </html>
